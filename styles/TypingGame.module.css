@@ -1,0 +1,102 @@
+.game {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 100vh;
+  font-family: var(--font-inter);
+}
+
+.stats {
+  display: flex;
+  justify-content: space-between;
+  width: 100%;
+  padding: 20px;
+  font-size: 24px;
+  color: var(--secondary-color);
+}
+
+.score {
+  font-size: 36px;
+  font-weight: bold;
+  transition: color 0.3s ease;
+}
+
+.scoreUp {
+  color: #00bfff; /* Bright blue */
+}
+
+.scoreDown {
+  color: #ff0000; /* Red */
+}
+
+.timerContainer {
+  display: flex;
+  align-items: center;
+}
+
+.sandboxTimer {
+  width: 20px;
+  height: 40px;
+  background-color: var(--secondary-color);
+  margin-left: 10px;
+  transition: transform 1s;
+}
+
+.flipped {
+  transform: rotate(180deg);
+}
+
+.wordContainer {
+  position: relative;
+  width: 100%;
+  overflow: hidden;
+}
+
+.word {
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  font-size: 36px;
+  color: var(--primary-color);
+  text-shadow: 2px 2px var(--secondary-color);
+}
+
+.input {
+  margin-top: 20px;
+  padding: 10px;
+  font-size: 18px;
+  width: 300px;
+  text-align: center;
+  border: none;
+  border-radius: 5px;
+  background-color: var(--text-color);
+  color: var(--primary-color);
+}
+
+.gameOver {
+  margin-top: 20px;
+  font-size: 24px;
+  color: var(--secondary-color);
+  text-align: center;
+}
+
+.startButton,
+.restartButton {
+  margin-top: 20px;
+  padding: 10px 20px;
+  font-size: 18px;
+  background-color: var(--primary-color);
+  color: var(--text-color);
+  border: none;
+  border-radius: 5px;
+  cursor: pointer;
+  transition: background-color 0.3s ease;
+}
+
+.startButton:hover,
+.restartButton:hover {
+  background-color: var(--secondary-color);
+  color: var(--primary-color);
+}
+
