@@ -25,7 +25,22 @@ export default function TypingGame() {
   const gameOverSoundRef = useRef<HTMLAudioElement | null>(null)
   const dropIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
+  // Add mounting ref
+  const isMountedRef = useRef(true);
+
+  useEffect(() => {
+    // Cleanup function for component unmount
+    return () => {
+      isMountedRef.current = false;
+      if (dropIntervalRef.current) {
+        clearInterval(dropIntervalRef.current);
+        dropIntervalRef.current = null;
+      }
+    };
+  }, []);
+
   const startNewWord = useCallback(() => {
+    if (!isMountedRef.current) return;
     if (wordsCompleted >= 10) {
       setGameOver(true)
       if (gameOverSoundRef.current) {
@@ -81,41 +96,60 @@ export default function TypingGame() {
   }, [])
 
   useEffect(() => {
-    if (gameStarted && !gameOver && !isPaused) {
+    if (gameStarted && !gameOver && !isPaused && isMountedRef.current) {
       dropIntervalRef.current = setInterval(() => {
+        if (!isMountedRef.current) {
+          if (dropIntervalRef.current) {
+            clearInterval(dropIntervalRef.current);
+            dropIntervalRef.current = null;
+          }
+          return;
+        }
+        
         setWordPosition((prevPosition) => {
           if (prevPosition >= WORD_CONTAINER_HEIGHT) {
-            startNewWord()
-            setScoreChange(-word.length)
-            setTimeout(() => setScoreChange(0), SCORE_CHANGE_DURATION)
-            return 0
+            if (isMountedRef.current) {
+              startNewWord();
+              setScoreChange(-word.length);
+              setTimeout(() => {
+                if (isMountedRef.current) {
+                  setScoreChange(0);
+                }
+              }, SCORE_CHANGE_DURATION);
+            }
+            return 0;
           }
-          return prevPosition + 1
-        })
-      }, WORD_FALL_INTERVAL)
+          return prevPosition + 1;
+        });
+      }, WORD_FALL_INTERVAL);
 
       return () => {
         if (dropIntervalRef.current) {
-          clearInterval(dropIntervalRef.current)
-          dropIntervalRef.current = null
+          clearInterval(dropIntervalRef.current);
+          dropIntervalRef.current = null;
         }
-      }
+      };
     }
   }, [gameStarted, gameOver, isPaused, startNewWord, word.length])
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (isPaused) return
-    setInput(e.target.value)
+    if (isPaused || !isMountedRef.current) return;
+    setInput(e.target.value);
     if (e.target.value.toLowerCase() === word.toLowerCase()) {
-      const newScore = word.length
-      setScore((prevScore) => prevScore + newScore)
-      setScoreChange(newScore)
-      setWordsCompleted(prev => prev + 1)
-      setTimeout(() => setScoreChange(0), SCORE_CHANGE_DURATION)
-      setInput("")
-      startNewWord()
+      if (!isMountedRef.current) return;
+      const newScore = word.length;
+      setScore((prevScore) => prevScore + newScore);
+      setScoreChange(newScore);
+      setWordsCompleted(prev => prev + 1);
+      setTimeout(() => {
+        if (isMountedRef.current) {
+          setScoreChange(0);
+        }
+      }, SCORE_CHANGE_DURATION);
+      setInput("");
+      startNewWord();
     }
-  }
+  };
 
   return (
     <div className={styles.game}>
