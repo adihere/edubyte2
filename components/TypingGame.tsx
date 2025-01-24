@@ -6,67 +6,83 @@ import { getRandomWord } from "../utils/wordList"
 import styles from "../styles/TypingGame.module.css"
 
 // Game parameters
-const MIN_START_TIME = 5
-const MAX_START_TIME = 15
 const WORD_FALL_INTERVAL = 50 // milliseconds
 const WORD_CONTAINER_HEIGHT = 400 // pixels
-const SCORE_CHANGE_DURATION = 1000 // milliseconds
-const SANDBOX_FLIP_DURATION = 1000 // milliseconds
+const SCORE_CHANGE_DURATION = 500 // milliseconds
 
 export default function TypingGame() {
   const [word, setWord] = useState("")
   const [input, setInput] = useState("")
   const [score, setScore] = useState(0)
-  const [timeLeft, setTimeLeft] = useState(0)
   const [gameOver, setGameOver] = useState(false)
   const [gameStarted, setGameStarted] = useState(false)
   const [wordPosition, setWordPosition] = useState(0)
   const [scoreChange, setScoreChange] = useState(0)
-  const [sandboxFlipped, setSandboxFlipped] = useState(false)
+  const [wordsCompleted, setWordsCompleted] = useState(0)
+  const [isPaused, setIsPaused] = useState(false)
 
   const startSoundRef = useRef<HTMLAudioElement | null>(null)
   const gameOverSoundRef = useRef<HTMLAudioElement | null>(null)
+  const dropIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
   const startNewWord = useCallback(() => {
+    if (wordsCompleted >= 10) {
+      setGameOver(true)
+      if (gameOverSoundRef.current) {
+        gameOverSoundRef.current.play()
+      }
+      return;
+    }
     setWord(getRandomWord())
     setWordPosition(0)
-  }, [])
+  }, [wordsCompleted])
 
   const startGame = useCallback(() => {
-    const randomStartTime = Math.floor(Math.random() * (MAX_START_TIME - MIN_START_TIME + 1) + MIN_START_TIME)
-    setTimeLeft(randomStartTime)
+    if (dropIntervalRef.current) {
+      clearInterval(dropIntervalRef.current)
+      dropIntervalRef.current = null
+    }
     setGameStarted(true)
     setGameOver(false)
     setScore(0)
+    setWordsCompleted(0)
+    setIsPaused(false)
     startNewWord()
     if (startSoundRef.current) {
       startSoundRef.current.play()
     }
   }, [startNewWord])
 
-  useEffect(() => {
-    if (gameStarted && !gameOver) {
-      const timer = setInterval(() => {
-        setTimeLeft((prevTime) => {
-          if (prevTime <= 1) {
-            clearInterval(timer)
-            setGameOver(true)
-            if (gameOverSoundRef.current) {
-              gameOverSoundRef.current.play()
-            }
-            return 0
-          }
-          return prevTime - 1
-        })
-      }, 1000)
-
-      return () => clearInterval(timer)
+  const handlePause = useCallback(() => {
+    if (isPaused) {
+      // Resume game
+      setIsPaused(false)
+    } else {
+      // Pause game
+      setIsPaused(true)
+      if (dropIntervalRef.current) {
+        clearInterval(dropIntervalRef.current)
+        dropIntervalRef.current = null
+      }
     }
-  }, [gameStarted, gameOver])
+  }, [isPaused])
+
+  const handleStop = useCallback(() => {
+    if (dropIntervalRef.current) {
+      clearInterval(dropIntervalRef.current)
+      dropIntervalRef.current = null
+    }
+    setGameOver(true)
+    setGameStarted(false)
+    setIsPaused(false)
+    if (gameOverSoundRef.current) {
+      gameOverSoundRef.current.play()
+    }
+  }, [])
 
   useEffect(() => {
-    if (gameStarted && !gameOver) {
-      const dropInterval = setInterval(() => {
+    if (gameStarted && !gameOver && !isPaused) {
+      dropIntervalRef.current = setInterval(() => {
         setWordPosition((prevPosition) => {
           if (prevPosition >= WORD_CONTAINER_HEIGHT) {
             startNewWord()
@@ -78,23 +94,23 @@ export default function TypingGame() {
         })
       }, WORD_FALL_INTERVAL)
 
-      return () => clearInterval(dropInterval)
+      return () => {
+        if (dropIntervalRef.current) {
+          clearInterval(dropIntervalRef.current)
+          dropIntervalRef.current = null
+        }
+      }
     }
-  }, [gameStarted, gameOver, startNewWord, word.length])
-
-  useEffect(() => {
-    if (timeLeft === 0 && !sandboxFlipped) {
-      setSandboxFlipped(true)
-      setTimeout(() => setSandboxFlipped(false), SANDBOX_FLIP_DURATION)
-    }
-  }, [timeLeft, sandboxFlipped])
+  }, [gameStarted, gameOver, isPaused, startNewWord, word.length])
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (isPaused) return
     setInput(e.target.value)
     if (e.target.value.toLowerCase() === word.toLowerCase()) {
       const newScore = word.length
       setScore((prevScore) => prevScore + newScore)
       setScoreChange(newScore)
+      setWordsCompleted(prev => prev + 1)
       setTimeout(() => setScoreChange(0), SCORE_CHANGE_DURATION)
       setInput("")
       startNewWord()
@@ -111,12 +127,25 @@ export default function TypingGame() {
         >
           Score: {score}
         </div>
-        <div className={styles.timerContainer}>
-          <div>Time: {timeLeft}s</div>
-          <div className={`${styles.sandboxTimer} ${sandboxFlipped ? styles.flipped : ""}`} />
-        </div>
+        <div>Words: {wordsCompleted}/10</div>
+        {gameStarted && !gameOver && (
+          <div className={styles.gameControls}>
+            <button 
+              onClick={handlePause} 
+              className={styles.controlButton}
+            >
+              {isPaused ? 'Resume' : 'Pause'}
+            </button>
+            <button 
+              onClick={handleStop} 
+              className={styles.controlButton}
+            >
+              Stop
+            </button>
+          </div>
+        )}
       </div>
-      <div className={styles.wordContainer} style={{ height: WORD_CONTAINER_HEIGHT }}>
+      <div className={`${styles.wordContainer} ${isPaused ? styles.paused : ''}`} style={{ height: WORD_CONTAINER_HEIGHT }}>
         {gameStarted && !gameOver && (
           <div className={styles.word} style={{ top: `${wordPosition}px` }}>
             {word}
@@ -134,7 +163,8 @@ export default function TypingGame() {
           value={input}
           onChange={handleInputChange}
           className={styles.input}
-          placeholder="Type the word here"
+          placeholder={isPaused ? "Game Paused" : "Type the word here"}
+          disabled={isPaused}
         />
       )}
       {gameOver && (
