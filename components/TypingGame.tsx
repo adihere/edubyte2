@@ -11,6 +11,10 @@ const WORD_CONTAINER_HEIGHT = 400 // pixels
 const SCORE_CHANGE_DURATION = 500 // milliseconds
 
 export default function TypingGame() {
+  // Add new state for error handling
+  const [error, setError] = useState<string | null>(null);
+  const [soundsLoaded, setSoundsLoaded] = useState(false);
+
   const [word, setWord] = useState("")
   const [input, setInput] = useState("")
   const [score, setScore] = useState(0)
@@ -39,34 +43,74 @@ export default function TypingGame() {
     };
   }, []);
 
+  // Add sound loading handler
+  useEffect(() => {
+    const loadSounds = async () => {
+      try {
+        if (startSoundRef.current && gameOverSoundRef.current) {
+          await Promise.all([
+            startSoundRef.current.load(),
+            gameOverSoundRef.current.load()
+          ]);
+          setSoundsLoaded(true);
+        }
+      } catch (err) {
+        setError("Failed to load game sounds. Please refresh the page.");
+      }
+    };
+    loadSounds();
+  }, []);
+
   const startNewWord = useCallback(() => {
     if (!isMountedRef.current) return;
-    if (wordsCompleted >= 10) {
-      setGameOver(true)
-      if (gameOverSoundRef.current) {
-        gameOverSoundRef.current.play()
+    try {
+      if (wordsCompleted >= 10) {
+        setGameOver(true);
+        if (gameOverSoundRef.current) {
+          gameOverSoundRef.current.play().catch(() => {
+            setError("Failed to play sound effect");
+          });
+        }
+        return;
       }
-      return;
+      const newWord = getRandomWord();
+      if (!newWord || newWord.length < 1) {
+        throw new Error("Invalid word generated");
+      }
+      setWord(newWord);
+      setWordPosition(0);
+    } catch (err) {
+      setError("Failed to generate new word");
+      handleStop();
     }
-    setWord(getRandomWord())
-    setWordPosition(0)
-  }, [wordsCompleted])
+  }, [wordsCompleted, handleStop]);
 
   const startGame = useCallback(() => {
-    if (dropIntervalRef.current) {
-      clearInterval(dropIntervalRef.current)
-      dropIntervalRef.current = null
+    if (!soundsLoaded) {
+      setError("Please wait for game resources to load");
+      return;
     }
-    setGameStarted(true)
-    setGameOver(false)
-    setScore(0)
-    setWordsCompleted(0)
-    setIsPaused(false)
-    startNewWord()
-    if (startSoundRef.current) {
-      startSoundRef.current.play()
+    try {
+      if (dropIntervalRef.current) {
+        clearInterval(dropIntervalRef.current);
+        dropIntervalRef.current = null;
+      }
+      setError(null);
+      setGameStarted(true);
+      setGameOver(false);
+      setScore(0);
+      setWordsCompleted(0);
+      setIsPaused(false);
+      startNewWord();
+      if (startSoundRef.current) {
+        startSoundRef.current.play().catch(() => {
+          setError("Failed to play sound effect");
+        });
+      }
+    } catch (err) {
+      setError("Failed to start game");
     }
-  }, [startNewWord])
+  }, [startNewWord, soundsLoaded]);
 
   const handlePause = useCallback(() => {
     if (isPaused) {
@@ -134,25 +178,49 @@ export default function TypingGame() {
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (isPaused || !isMountedRef.current) return;
-    setInput(e.target.value);
-    if (e.target.value.toLowerCase() === word.toLowerCase()) {
-      if (!isMountedRef.current) return;
-      const newScore = word.length;
-      setScore((prevScore) => prevScore + newScore);
-      setScoreChange(newScore);
-      setWordsCompleted(prev => prev + 1);
-      setTimeout(() => {
-        if (isMountedRef.current) {
-          setScoreChange(0);
-        }
-      }, SCORE_CHANGE_DURATION);
+    try {
+      const inputValue = e.target.value;
+      // Validate input
+      if (inputValue.length > word.length * 2) {
+        throw new Error("Input too long");
+      }
+      if (!/^[a-zA-Z0-9\s]*$/.test(inputValue)) {
+        throw new Error("Invalid characters");
+      }
+      
+      setInput(inputValue);
+      if (inputValue.toLowerCase() === word.toLowerCase()) {
+        if (!isMountedRef.current) return;
+        const newScore = word.length;
+        setScore((prevScore) => prevScore + newScore);
+        setScoreChange(newScore);
+        setWordsCompleted(prev => prev + 1);
+        setTimeout(() => {
+          if (isMountedRef.current) {
+            setScoreChange(0);
+          }
+        }, SCORE_CHANGE_DURATION);
+        setInput("");
+        startNewWord();
+      }
+    } catch (err) {
+      if (err instanceof Error) {
+        setError(err.message);
+      }
       setInput("");
-      startNewWord();
     }
   };
 
   return (
     <div className={styles.game}>
+      {error && (
+        <div className={styles.error}>
+          {error}
+          <button onClick={() => setError(null)} className={styles.dismissError}>
+            ✕
+          </button>
+        </div>
+      )}
       <audio ref={startSoundRef} src="/sounds/start.mp3" />
       <audio ref={gameOverSoundRef} src="/sounds/gameover.mp3" />
       <div className={styles.stats}>
