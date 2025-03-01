@@ -1,2 +1,1 @@
-# typing-practical
-typing game 
+# Edubyte
